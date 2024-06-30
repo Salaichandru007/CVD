@@ -1,0 +1,72 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, roc_auc_score
+# Initialize the project
+project = Project(project_id='12cb02d1-573c-4ebf-99bc-6428dd35e429', project_access_token='p-2+gpXW0fVWDrmkvHVHY9vIrg==;ZQoZ5m8S7jy649Y6vFf8Ng==:7DG48/CPsnogodzKKD8znghqo33iNRGghlTkQ/+HPWnZwszbvvShO9Ic6JjeC3p6izIK8BJ9OBOgikYkv2YW1BLA70tTXysJaw==')
+
+# Get the data asset
+file_name = 'CVD_cleaned(in).csv'  # Your dataset filename
+data_asset = project.get_file(file_name)
+
+# Load the dataset
+df = pd.read_csv(data_asset)
+
+# Handle missing values
+imputer = SimpleImputer(strategy='mean')
+df_imputed = pd.DataFrame(imputer.fit_transform(df), columns=df.columns)
+
+# Encode categorical variables if any (assuming all are numerical here)
+
+# Split the data
+X = df_imputed.drop(columns=['TenYearCHD'])  # Assuming 'TenYearCHD' is the target variable
+y = df_imputed['TenYearCHD']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Normalize the data
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Train a Random Forest Classifier
+clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf.fit(X_train_scaled, y_train)
+
+# Predict on the test set
+y_pred = clf.predict(X_test_scaled)
+y_proba = clf.predict_proba(X_test_scaled)[:, 1]
+
+# Evaluate the model
+print(classification_report(y_test, y_pred))
+print('AUC-ROC:', roc_auc_score(y_test, y_proba))
+
+import joblib
+
+# Save the model and scaler
+joblib.dump(clf, 'cardio_risk_model.pkl')
+joblib.dump(scaler, 'scaler.pkl')
+
+#creating user interface
+from flask import Flask, request, jsonify
+import joblib
+import numpy as np
+
+# Load the model and scaler
+model = joblib.load('cardio_risk_model.pkl')
+scaler = joblib.load('scaler.pkl')
+
+app = Flask(__name__)
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.json
+    input_data = np.array([data['feature1'], data['feature2'], ...])  # Replace with actual feature names
+    input_data_scaled = scaler.transform([input_data])
+    prediction = model.predict(input_data_scaled)[0]
+    probability = model.predict_proba(input_data_scaled)[0, 1]
+    return jsonify({'prediction': int(prediction), 'probability': probability})
+
+if __name__ == '__main__':
+    app.run(debug=True)
